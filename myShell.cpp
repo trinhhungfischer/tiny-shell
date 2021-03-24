@@ -58,22 +58,21 @@ int (*ptr_func[])(char **) = {
     &resumeCmd,
     &pathCmd,
     &addpathCmd,
-    &killCmd, 
+    &killCmd 
 };
 
 const char * listLsh[] = {"exit", 
-                    "help", 
-                    "start",
-                    "date", 
-                    "time", 
-                    "dir", 
-                    "list", 
-                    "kill", 
-                    "stop", 
-                    "resume", 
-                    "path", 
-                    "addpath",
-                    "kill"};
+                        "help", 
+                        "start",
+                        "date", 
+                        "time", 
+                        "dir", 
+                        "list", 
+                        "stop", 
+                        "resume", 
+                        "path", 
+                        "addpath",
+                        "kill"};
 
 const char *listInstruction[] = {"Write instruction here", 
                             "Write instruction here", 
@@ -106,15 +105,19 @@ void lsh_loop()
         cout << "myShell> ";
         line = lsh_read_line();
         args = lsh_split_line(line);
+
+
         int error = execute_line(args);
-        if (error != 0)
+
+        free(line);
+        free(args);
+        
+        if (error == 1)
         {
             cout << "The command end in some errors" << endl;
         }
     }
     while (status);
-    free(line);
-    free(args);
 }
 
 char *lsh_read_line(void)
@@ -223,7 +226,6 @@ int helpCmd(char **argv)
 
 int startCmd(char **argv)
 {
-    cout << "DM CUOC DOI";
     if (argv[1] == NULL) cout << "List of process this shell support" << endl;
 
     else
@@ -236,11 +238,11 @@ int startCmd(char **argv)
         si.cb = sizeof(si);
         if (argv[2] == NULL || strcmp(argv[2], "background") == 0)
         {
-            
-            CreateProcessA(processName,NULL,NULL,NULL,FALSE,
-               CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
             listProcess[ID] = processStruct{ID, argv[1], 0, pi };
             ID ++;
+            CreateProcessA(processName,NULL,NULL,NULL,FALSE,
+               CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
+            
         }
         else if (strcmp(argv[2], "foreground") == 0)
         {
@@ -259,12 +261,14 @@ int startCmd(char **argv)
 
 int killCmd(char **argv)
 {   
-    
-    cout << "DM CUOC DOI" << endl; 
- 
+    cout << "Kill" << endl;
     int i = (int) atoi(argv[1]);
+    
+    cout << i << endl; 
     TerminateProcess(listProcess[i - 1].pi.hProcess, 0);
 
+    CloseHandle(listProcess[i - 1].pi.hProcess);
+    CloseHandle(listProcess[i - 1].pi.hThread);
     // // Block of code to try
     // }
     // catch (int exception) {
@@ -279,13 +283,35 @@ int killCmd(char **argv)
 
 int timeCmd(char **argv)
 {
-    cout << "DM CUOC DOI" << endl;
+    int seconds, minutes, hours;
+    string str;
+  
+    //storing total seconds
+    time_t total_seconds=time(0);
+  
+    //getting values of seconds, minutes and hours
+    struct tm* ct=localtime(&total_seconds);
+  
+    seconds=ct->tm_sec;
+    minutes=ct->tm_min;
+    hours=ct->tm_hour;
+    
+    //converting it into 12 hour format
+    if(hours>=12)
+      str="PM";
+    else
+      str="AM";
+    hours=hours>12?hours-12:hours;  
+    
+    
+    //printing the result
+    cout<< (hours<10?"0":"") << hours <<":" << (minutes<10?"0":"") << minutes << ":" << (seconds<10?"0":"") << seconds << " " << str <<endl;
     return 0;
 }
 
 int exitCmd(char **argv)
 {
-    cout << "DM CUOC DOI" << endl;
+    cout << "Exit" << endl;
     status = false;
     return 0;
 }
@@ -303,40 +329,48 @@ int listCmd(char **argv)
 
 int dirCmd(char **argv)
 {
-    cout << "DM CUOC DOI" << endl;
+    cout << "Dir" << endl;
     return 0;
 }
 
 int stopCmd(char **argv)
 {
-    cout << "DM CUOC DOI" << endl;
+    cout << "Stop" << endl;
     return 0;
 }
 
 int resumeCmd(char **argv)
 {
 
-    cout << "DM CUOC DOI" << endl;
+    cout << "Resume" << endl;
     return 0;
 }
 
 int pathCmd(char **argv)
 {
-    cout << "DM CUOC DOI" << endl;
-    return 1;
+    cout << "Path" << endl;
+    return 0;
 
 }
 
 int addpathCmd(char **argv)
 {
-    cout << "DM CUOC DOI" << endl;
+    cout << "Add path" << endl;
     return 0;
 }
 
 int dateCmd(char **argv)
 {
-    cout << "DM CUOC DOI" << endl;  
-    return 0;  
+
+    string Month[12] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+	string wDay[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+	//storing total seconds
+   	time_t total_seconds=time(0);
+  
+ 	struct tm* ct=localtime(&total_seconds);
+ 		
+    cout<< wDay[ct->tm_wday] << ", " << Month[ct->tm_mon] << " " << ct->tm_mday << ", " << ct->tm_year + 1900<<endl;
+    return 0;
 }
 
 void removeProcessFromList(int Id)
