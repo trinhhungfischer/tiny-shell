@@ -3,6 +3,8 @@
 #include <string.h>
 #include <ctime>
 #include <tchar.h>
+#include <stdio.h>
+#include <signal.h>
 using namespace std;
 
 #define LSH_RL_BUFFSIZE 1024
@@ -31,6 +33,9 @@ char * lsh_read_line();
 char ** lsh_split_line(char *line);
 int execute_line(char **argv);
 void removeProcessFromList(int id);
+void my_handler(sig_atomic_t s);
+
+
 
 int startCmd(char **argv);
 int helpCmd(char **argv);
@@ -108,10 +113,6 @@ void lsh_loop()
 
 
         int error = execute_line(args);
-
-        free(line);
-        free(args);
-        
         if (error == 1)
         {
             cout << "The command end in some errors" << endl;
@@ -210,6 +211,13 @@ int execute_line(char **args)
     return 0;
 }
 
+void my_handler(sig_atomic_t s){
+    TerminateProcess(foregroundProcess.pi.hProcess, 0);
+
+    CloseHandle(foregroundProcess.pi.hProcess);
+    CloseHandle(foregroundProcess.pi.hThread);
+    cout << "You use Ctrl + C to kill foreground process" << endl;
+}
 
 int helpCmd(char **argv)
 {
@@ -231,24 +239,32 @@ int startCmd(char **argv)
     else
     {
         char *processName = argv[1];
-        STARTUPINFO si ;
-        PROCESS_INFORMATION pi;
-        ZeroMemory(&si, sizeof(si));
 
-        si.cb = sizeof(si);
         if (argv[2] == NULL || strcmp(argv[2], "background") == 0)
         {
-            listProcess[ID] = processStruct{ID, argv[1], 0, pi };
-            ID ++;
+            STARTUPINFO si ;
+            PROCESS_INFORMATION pi;
+            ZeroMemory(&si, sizeof(si));
+            si.cb = sizeof(si);
+
             CreateProcessA(processName,NULL,NULL,NULL,FALSE,
                CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
+            listProcess[ID] = processStruct{ID, argv[1], 0, pi};
+            
+            ID ++;
             
         }
         else if (strcmp(argv[2], "foreground") == 0)
         {
+            STARTUPINFO si ;
+            PROCESS_INFORMATION pi;
+            ZeroMemory(&si, sizeof(si));
+            si.cb = sizeof(si);
+
             CreateProcessA(processName,NULL,NULL,NULL,FALSE,
                 CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
-            foregroundProcess = processStruct{0, argv[1], 0, pi};
+            foregroundProcess = processStruct{0, processName, 0, pi};
+            signal (SIGINT,my_handler);
             WaitForSingleObject(pi.hProcess, INFINITE);
             TerminateProcess(pi.hProcess, 0);
         } else
@@ -261,22 +277,17 @@ int startCmd(char **argv)
 
 int killCmd(char **argv)
 {   
-    cout << "Kill" << endl;
     int i = (int) atoi(argv[1]);
     
-    cout << i << endl; 
     TerminateProcess(listProcess[i - 1].pi.hProcess, 0);
 
     CloseHandle(listProcess[i - 1].pi.hProcess);
     CloseHandle(listProcess[i - 1].pi.hThread);
-    // // Block of code to try
-    // }
-    // catch (int exception) {
-    //     // Block of code to handle errors
-    //     if (exception == 1)
-    //         cout << "Invalid concept of kill command. Please input 'kill processId' ";
-    //     else if (exception == 2) cout << "Invalid Process ID. Please input 'list' to get process ID";
-    // }
+    cout << "Kill " << listProcess[i-1].cmdName << " success\n";
+    
+
+    removeProcessFromList(i - 1);
+    
     return 0;
  
 }
@@ -320,37 +331,118 @@ int listCmd(char **argv)
 {
     for (int i = 0; i< ID; i++)
     {
-        const char *status = (listProcess[i].status == 0)?"running":"stop";
-        printf("%-9d%-16s%s", listProcess[i].id + 1, listProcess[i].cmdName, status);
-        cout << endl;
+        DWORD dwExitCode;
+        GetExitCodeProcess(listProcess[i].pi.hProcess, &dwExitCode);
+        if ( dwExitCode != 259 )
+        {
+            removeProcessFromList(i);
+        }
+        else{
+            const char *status = (listProcess[i].status == 0)?"running":"stop";
+            printf("%-9d%-16s%s", listProcess[i].id + 1, listProcess[i].cmdName, status);
+            cout << endl;
+        }
     }
     return 0;
 }
 
 int dirCmd(char **argv)
 {
-    cout << "Dir" << endl;
-    return 0;
+    WIN32_FIND_DATA FindFileData;
+	HANDLE hFindFile;
+	SYSTEMTIME createdday;
+	LPCSTR file="*";
+	double sum=0;int countfile=0,countfolder=0;
+	hFindFile=FindFirstFileA(file,&FindFileData);
+	if(INVALID_HANDLE_VALUE ==hFindFile){
+	cout<< "The directory has no files";
+	return 0;
+}	else{
+	cout<<	"Directory"<<endl;
+	wcout<< FindFileData.cFileName<<"\t";
+
+	if((int)FindFileData.nFileSizeLow){	wcout<< FindFileData.nFileSizeLow<<" bytes"<<"\t";	countfile++;sum+=(double)FindFileData.nFileSizeLow;}
+	else {countfolder++;cout<<"\t"<<"<Dir>"<<"\t\t";}
+	FileTimeToSystemTime(&FindFileData.ftCreationTime,&createdday);
+	printf("%02d/%02d/%04d   %02d:%02d:%02d\n",createdday.wDay,createdday.wMonth,createdday.wYear,createdday.wHour,createdday.wMinute,createdday.wSecond);
+}
+	while(FindNextFileA(hFindFile,&FindFileData)){
+	wcout<< FindFileData.cFileName<<"\t";
+	
+
+	if((int)FindFileData.nFileSizeLow){wcout<< FindFileData.nFileSizeLow<<" bytes"<<"\t";	countfile++;sum+=(double)FindFileData.nFileSizeLow;}
+	else {countfolder++;cout<<"\t"<<"<Dir>"<<"\t\t";}
+	FileTimeToSystemTime(&FindFileData.ftCreationTime,&createdday);
+	printf("%02d/%02d/%04d   %02d:%02d:%02d\n",createdday.wDay,createdday.wMonth,createdday.wYear,createdday.wHour,createdday.wMinute,createdday.wSecond);
+}	
+	printf("\t\t%d files: %20.0lf bytes\n",countfile,sum);
+	cout<<"\t\t"<<countfolder <<" Dirs"<<endl;
+
+	FindClose(hFindFile);
+	return 0;
 }
 
 int stopCmd(char **argv)
 {
-    cout << "Stop" << endl;
+    int i = (int) atoi(argv[1]);
+    
+    SuspendThread(listProcess[i - 1].pi.hThread);
+    listProcess[i - 1].status = 1;
+
+    cout << "Stop " << listProcess[i - 1].cmdName << " success\n";
     return 0;
 }
 
 int resumeCmd(char **argv)
 {
-
-    cout << "Resume" << endl;
+    int i = (int) atoi(argv[1]);
+    
+    ResumeThread(listProcess[i - 1].pi.hThread);
+    listProcess[i - 1].status = 0;
+    
+    cout << "Resume " << listProcess[i - 1].cmdName << " success\n";
     return 0;
 }
 
 int pathCmd(char **argv)
 {
-    cout << "Path" << endl;
-    return 0;
+       // cout << "Path" << endl;
+    LPTSTR lpszVariable; 
+    LPTCH lpvEnv; 
+ 
+    // Get a pointer to the environment block. 
+ 
+    lpvEnv = GetEnvironmentStrings();
 
+    // If the returned pointer is NULL, exit.
+    if (lpvEnv == NULL)
+    {
+        printf("GetEnvironmentStrings failed (%d)\n", GetLastError()); 
+        return 0;
+    }
+ 
+    // Variable strings are separated by NULL byte, and the block is 
+    // terminated by a NULL byte. 
+
+   lpszVariable = (LPTSTR) lpvEnv;
+
+	/*for(int i=0;i<17;i++){lpszVariable += lstrlen(lpszVariable) + 1;}
+	_tprintf(TEXT("%s\n"), lpszVariable);
+        lpszVariable += lstrlen(lpszVariable) + 1;
+	
+   while (*lpszVariable)
+    {
+		
+        _tprintf(TEXT("%s\n"), lpszVariable);
+        lpszVariable += lstrlen(lpszVariable) + 1;
+    }
+    */
+	while(*lpszVariable!='P'&&*lpszVariable!='p')lpszVariable += lstrlen(lpszVariable) + 1;
+        printf("%s\n", lpszVariable);
+
+	FreeEnvironmentStrings(lpvEnv);
+   
+	return 0;
 }
 
 int addpathCmd(char **argv)
@@ -361,7 +453,6 @@ int addpathCmd(char **argv)
 
 int dateCmd(char **argv)
 {
-
     string Month[12] = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
 	string wDay[7] = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 	//storing total seconds
@@ -375,5 +466,8 @@ int dateCmd(char **argv)
 
 void removeProcessFromList(int Id)
 {
-
+    listProcess[Id].cmdName = listProcess[ID - 1].cmdName;
+    listProcess[Id].pi = listProcess[ID - 1].pi;
+    listProcess[Id].status = listProcess[ID - 1].status;
+    ID --;
 }
