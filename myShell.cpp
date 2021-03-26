@@ -194,7 +194,6 @@ int execute_line(char **args)
     int i = 0;
 
     if (args[0] == NULL) {
-    // An empty command was entered.
         return 1;
     }
     else
@@ -204,11 +203,12 @@ int execute_line(char **args)
             if (strcmp(args[0], listLsh[i]) == 0)
             {
                 (*ptr_func[i])(args);
-                break;
+                return 0;
             }
         }
     }   
-    return 0;
+    cout << "'"<< args[0] << "' is not recognized as a command, use help command to get more information" << endl;
+    return 1;
 }
 
 void my_handler(sig_atomic_t s){
@@ -216,13 +216,15 @@ void my_handler(sig_atomic_t s){
 
     CloseHandle(foregroundProcess.pi.hProcess);
     CloseHandle(foregroundProcess.pi.hThread);
-    cout << "You use Ctrl + C to kill foreground process" << endl;
+    cout << "You use Ctrl + C to kill " << foregroundProcess.cmdName <<" foreground process" << endl;
 }
 
 int helpCmd(char **argv)
 {
-    cout << "____________________________________________________________________" << endl;
-    cout << "Team - Project 1" << endl;
+    cout << "_________________________________________________________________________" << endl;
+    cout << "                             Project 1" << endl;
+    cout << "_________________________________________________________________________" << endl;
+    
     int n = sizeof(listLsh) / sizeof(char *);
  
     for (int i =0; i<n; i++)
@@ -285,19 +287,32 @@ int startCmd(char **argv)
 
 int killCmd(char **argv)
 {   
-    int i = (int) atoi(argv[1]);
-    
-    TerminateProcess(listProcess[i - 1].pi.hProcess, 0);
+    if (argv[1] == NULL)
+    {
+        cout << "Please kill + 'ID_of_Process'" << endl;
+        return 1;
+    }
+    else
+    {
+        int i = (int) atoi(argv[1]);
+        if (i > ID)
+        {
+            cout << "The ID of process is not exist" << endl;
+            return 1;
+        }
 
-    CloseHandle(listProcess[i - 1].pi.hProcess);
-    CloseHandle(listProcess[i - 1].pi.hThread);
-    cout << "Kill " << listProcess[i-1].cmdName << " success\n";
-    
+        TerminateProcess(listProcess[i - 1].pi.hProcess, 0);
 
-    removeProcessFromList(i - 1);
+        CloseHandle(listProcess[i - 1].pi.hProcess);
+        CloseHandle(listProcess[i - 1].pi.hThread);
+        cout << "Kill " << listProcess[i-1].cmdName << " success\n";
+    
+        removeProcessFromList(i - 1);
     
     return 0;
- 
+
+    }
+     
 }
 
 int timeCmd(char **argv)
@@ -330,13 +345,19 @@ int timeCmd(char **argv)
 
 int exitCmd(char **argv)
 {
-    cout << "Exit" << endl;
+    cout << "Quit shell success" << endl;
     status = false;
     return 0;
 }
 
 int listCmd(char **argv)
 {
+    if (ID == 0)
+    {
+        cout << "There are no background proccess" << endl;
+        return 0;
+    }
+
     for (int i = 0; i< ID; i++)
     {
         DWORD dwExitCode;
@@ -359,30 +380,58 @@ int dirCmd(char **argv)
     WIN32_FIND_DATA FindFileData;
 	HANDLE hFindFile;
 	SYSTEMTIME createdday;
-	LPCSTR file="*";
-	double sum=0;int countfile=0,countfolder=0;
-	hFindFile=FindFirstFileA(file,&FindFileData);
-	if(INVALID_HANDLE_VALUE ==hFindFile){
-	cout<< "The directory has no files";
-	return 0;
-}	else{
-	cout<<	"Directory"<<endl;
-	wcout<< FindFileData.cFileName<<"\t";
+	char str[1024];
+	
+    if(argv[1]==NULL) strcpy(str,"*");
+	else
+    {
+	    int i;
+	    for(i=0;argv[1][i]!='\0';i++) str[i]=argv[1][i];
+	    str[i]=0;
+	    strcat(str,"\\*");
+    }
+	LPCSTR file = str;
+	double sum = 0;int countfile=0,countfolder=0;
+	hFindFile = FindFirstFileA(file,&FindFileData);
+	
+    if(INVALID_HANDLE_VALUE == hFindFile)
+    {
+	    cout<< "The directory has no files";
+	    return 0;
+    } else 
+    {
+	    cout<<	"Directory" << endl;
+	    wcout<< FindFileData.cFileName << "\t";
 
-	if((int)FindFileData.nFileSizeLow){	wcout<< FindFileData.nFileSizeLow<<" bytes"<<"\t";	countfile++;sum+=(double)FindFileData.nFileSizeLow;}
-	else {countfolder++;cout<<"\t"<<"<Dir>"<<"\t\t";}
-	FileTimeToSystemTime(&FindFileData.ftCreationTime,&createdday);
-	printf("%02d/%02d/%04d   %02d:%02d:%02d\n",createdday.wDay,createdday.wMonth,createdday.wYear,createdday.wHour,createdday.wMinute,createdday.wSecond);
-}
+    	if ((int)FindFileData.nFileSizeLow)
+        {	
+            wcout << FindFileData.nFileSizeLow << " bytes" << "\t";	
+            countfile ++;
+            sum += (double) FindFileData.nFileSizeLow;
+        } else 
+        {
+            countfolder++;
+            cout << "\t" << "<Dir>" << "\t\t";
+        }
+	    FileTimeToSystemTime(&FindFileData.ftCreationTime,&createdday);
+	    printf("%02d/%02d/%04d   %02d:%02d:%02d\n",createdday.wDay,createdday.wMonth,createdday.wYear,createdday.wHour,createdday.wMinute,createdday.wSecond);
+    }
 	while(FindNextFileA(hFindFile,&FindFileData)){
 	wcout<< FindFileData.cFileName<<"\t";
 	
 
-	if((int)FindFileData.nFileSizeLow){wcout<< FindFileData.nFileSizeLow<<" bytes"<<"\t";	countfile++;sum+=(double)FindFileData.nFileSizeLow;}
-	else {countfolder++;cout<<"\t"<<"<Dir>"<<"\t\t";}
+	if ((int)FindFileData.nFileSizeLow)
+    {
+        wcout<< FindFileData.nFileSizeLow<<" bytes"<<"\t";
+        countfile++;sum+=(double)FindFileData.nFileSizeLow;
+    } else 
+    {
+        countfolder++;
+        cout<<"\t"<<"<Dir>"<<"\t\t";
+    }
 	FileTimeToSystemTime(&FindFileData.ftCreationTime,&createdday);
 	printf("%02d/%02d/%04d   %02d:%02d:%02d\n",createdday.wDay,createdday.wMonth,createdday.wYear,createdday.wHour,createdday.wMinute,createdday.wSecond);
-}	
+    }	
 	printf("\t\t%d files: %20.0lf bytes\n",countfile,sum);
 	cout<<"\t\t"<<countfolder <<" Dirs"<<endl;
 
@@ -392,24 +441,51 @@ int dirCmd(char **argv)
 
 int stopCmd(char **argv)
 {
-    int i = (int) atoi(argv[1]);
+    if (argv[1] == NULL)
+    {
+        cout << "Please stop + 'ID_of_Process'" << endl;
+        return 1;
+    }
+    else
+    {
+        int i = (int) atoi(argv[1]);
+        if (i > ID)
+        {
+            cout << "The ID of process is not exist" << endl;
+            return 1;
+        }
     
-    SuspendThread(listProcess[i - 1].pi.hThread);
-    listProcess[i - 1].status = 1;
+        SuspendThread(listProcess[i - 1].pi.hThread);
+        listProcess[i - 1].status = 1;
 
-    cout << "Stop " << listProcess[i - 1].cmdName << " success\n";
-    return 0;
+        cout << "Stop " << listProcess[i - 1].cmdName << " success\n";
+        return 0;
+    }
+    
 }
 
 int resumeCmd(char **argv)
 {
-    int i = (int) atoi(argv[1]);
+    if (argv[1] == NULL)
+    {
+        cout << "Please resume + 'ID_of_Process'" << endl;
+        return 1;
+    }
+    else
+    {
+        int i = (int) atoi(argv[1]);
+        if (i > ID)
+        {
+            cout << "The ID of process is not exist" << endl;
+            return 1;
+        }
     
-    ResumeThread(listProcess[i - 1].pi.hThread);
-    listProcess[i - 1].status = 0;
+        ResumeThread(listProcess[i - 1].pi.hThread);
+        listProcess[i - 1].status = 0;
     
-    cout << "Resume " << listProcess[i - 1].cmdName << " success\n";
-    return 0;
+        cout << "Resume " << listProcess[i - 1].cmdName << " success\n";
+        return 0;
+    }
 }
 
 int pathCmd(char **argv)
@@ -451,8 +527,8 @@ void SetUserVariablePath(char* value){
 	lpvEnv = GetEnvironmentStrings();
     lpszVariable = (LPTSTR) lpvEnv;
 	while(*lpszVariable!='P'&&*lpszVariable!='p')lpszVariable += lstrlen(lpszVariable) + 1;
-	lpszVariable+=5;
-	string strval=lpszVariable;strval+=";"+string(value);
+	lpszVariable += 5;
+	string strval = lpszVariable;strval+=";"+string(value);
 	const char *path=(char*) strval.c_str();
 	FreeEnvironmentStrings(lpvEnv);                                               //new_value path need to update 
     regOpenResult = RegOpenKeyEx(HKEY_CURRENT_USER,key_name, 0, KEY_ALL_ACCESS, &hkey);
@@ -495,7 +571,7 @@ void runDotBat(char *fileName)
         }
     }
     else{
-        cout << "fuck";
+        cout << "Don not exit " << fileName << " in this direcory";
     }
    
 }
