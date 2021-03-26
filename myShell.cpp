@@ -1,5 +1,6 @@
 #include <windows.h>
-#include <bits/stdc++.h>
+#include <iostream>
+#include <fstream>
 #include <string.h>
 #include <ctime>
 #include <tchar.h>
@@ -34,7 +35,7 @@ char ** lsh_split_line(char *line);
 int execute_line(char **argv);
 void removeProcessFromList(int id);
 void my_handler(sig_atomic_t s);
-
+void runDotBat(char *nameFile);
 
 
 int startCmd(char **argv);
@@ -79,19 +80,18 @@ const char * listLsh[] = {"exit",
                         "addpath",
                         "kill"};
 
-const char *listInstruction[] = {"Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here", 
-                            "Write instruction here",
-                            "Write instruction here"};
+const char *listInstruction[] = {"Quit the myShell.exe program", 
+                            "Provide Help information for myShell commands", 
+                            "Start new window to run process with background(default) or foreground", 
+                            "Display the current date", 
+                            "Display the current time", 
+                            "Display a list of files and subdirectories in a directory", 
+                            "List of all background proccesses", 
+                            "Stop a single process with its ID (Know its ID by list command)", 
+                            "Resume a suspended process with its ID (Know its ID by list command)", 
+                            "Display all global environment path", 
+                            "Add a variable to the global environment path", 
+                            "Kill a single process with its ID (Know its ID by list command)"};
 
 int main(int argc, char const *argv[])
 {
@@ -234,43 +234,51 @@ int helpCmd(char **argv)
 
 int startCmd(char **argv)
 {
-    if (argv[1] == NULL) cout << "List of process this shell support" << endl;
+    if (argv[1] == NULL) cout << "List of process this shell support is .bat and .exe" << endl;
 
     else
     {
-        char *processName = argv[1];
-
-        if (argv[2] == NULL || strcmp(argv[2], "background") == 0)
+        if (strstr(argv[1], ".exe") != NULL)
         {
-            STARTUPINFO si ;
-            PROCESS_INFORMATION pi;
-            ZeroMemory(&si, sizeof(si));
-            si.cb = sizeof(si);
+            char *processName = argv[1];
 
-            CreateProcessA(processName,NULL,NULL,NULL,FALSE,
-               CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
-            listProcess[ID] = processStruct{ID, argv[1], 0, pi};
+            if (argv[2] == NULL || strcmp(argv[2], "background") == 0)
+            {
+                STARTUPINFO si ;
+                PROCESS_INFORMATION pi;
+                ZeroMemory(&si, sizeof(si));
+                si.cb = sizeof(si);
+
+                CreateProcessA(processName,NULL,NULL,NULL,FALSE,
+                   CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
+                listProcess[ID] = processStruct{ID, argv[1], 0, pi};
             
-            ID ++;
+                ID ++;
             
-        }
-        else if (strcmp(argv[2], "foreground") == 0)
-        {
-            STARTUPINFO si ;
-            PROCESS_INFORMATION pi;
-            ZeroMemory(&si, sizeof(si));
-            si.cb = sizeof(si);
+            }
+            else if (strcmp(argv[2], "foreground") == 0)
+            {
+                STARTUPINFO si ;
+                PROCESS_INFORMATION pi;
+                ZeroMemory(&si, sizeof(si));
+                si.cb = sizeof(si);
 
-            CreateProcessA(processName,NULL,NULL,NULL,FALSE,
-                CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
-            foregroundProcess = processStruct{0, processName, 0, pi};
-            signal (SIGINT,my_handler);
-            WaitForSingleObject(pi.hProcess, INFINITE);
-            TerminateProcess(pi.hProcess, 0);
-        } else
-        {
-            cout << "Write fail Instruction here";
+                CreateProcessA(processName,NULL,NULL,NULL,FALSE,
+                    CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
+                foregroundProcess = processStruct{0, processName, 0, pi};
+                signal (SIGINT,my_handler);
+                WaitForSingleObject(pi.hProcess, INFINITE);
+                TerminateProcess(pi.hProcess, 0);
+            } else
+            {
+                cout << "Write fail Instruction here";
+            }
         }
+        else if (strstr(argv[1], ".bat") != NULL)
+        {
+            runDotBat(argv[1]);
+        }
+        
     }
     return 0;
 }
@@ -426,17 +434,6 @@ int pathCmd(char **argv)
 
    lpszVariable = (LPTSTR) lpvEnv;
 
-	/*for(int i=0;i<17;i++){lpszVariable += lstrlen(lpszVariable) + 1;}
-	_tprintf(TEXT("%s\n"), lpszVariable);
-        lpszVariable += lstrlen(lpszVariable) + 1;
-	
-   while (*lpszVariable)
-    {
-		
-        _tprintf(TEXT("%s\n"), lpszVariable);
-        lpszVariable += lstrlen(lpszVariable) + 1;
-    }
-    */
 	while(*lpszVariable!='P'&&*lpszVariable!='p')lpszVariable += lstrlen(lpszVariable) + 1;
         printf("%s\n", lpszVariable);
 
@@ -445,9 +442,28 @@ int pathCmd(char **argv)
 	return 0;
 }
 
+void SetUserVariablePath(char* value){
+    HKEY hkey;
+    long regOpenResult;
+    const char key_name[] = "Environment";
+	LPTSTR lpszVariable; 
+    LPTCH lpvEnv; 
+	lpvEnv = GetEnvironmentStrings();
+    lpszVariable = (LPTSTR) lpvEnv;
+	while(*lpszVariable!='P'&&*lpszVariable!='p')lpszVariable += lstrlen(lpszVariable) + 1;
+	lpszVariable+=5;
+	string strval=lpszVariable;strval+=";"+string(value);
+	const char *path=(char*) strval.c_str();
+	FreeEnvironmentStrings(lpvEnv);                                               //new_value path need to update 
+    regOpenResult = RegOpenKeyEx(HKEY_CURRENT_USER,key_name, 0, KEY_ALL_ACCESS, &hkey);
+    LPCSTR stuff = "path";                                                   //Variable Name 
+    RegSetValueEx(hkey,stuff,0,REG_SZ,(BYTE*) path, strlen(path));
+    RegCloseKey(hkey);
+}
+
 int addpathCmd(char **argv)
 {
-    cout << "Add path" << endl;
+    SetUserVariablePath(argv[1]);
     return 0;
 }
 
@@ -462,6 +478,26 @@ int dateCmd(char **argv)
  		
     cout<< wDay[ct->tm_wday] << ", " << Month[ct->tm_mon] << " " << ct->tm_mday << ", " << ct->tm_year + 1900<<endl;
     return 0;
+}
+
+void runDotBat(char *fileName)
+{
+    ifstream file(fileName);
+    if (file.is_open())
+    {
+        string line;
+        while ( getline(file, line))
+        {
+            char * cstr = new char [line.length() - 1];
+            strcpy(cstr, line.c_str());
+            char ** args = lsh_split_line(cstr);
+            execute_line(args);
+        }
+    }
+    else{
+        cout << "fuck";
+    }
+   
 }
 
 void removeProcessFromList(int Id)
