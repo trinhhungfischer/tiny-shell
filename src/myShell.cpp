@@ -208,7 +208,7 @@ int execute_line(char **args)
         }
     }   
     cout << "'"<< args[0] << "' is not recognized as a command, use help command to get more information" << endl;
-    return 1;
+    return 0;
 }
 
 void my_handler(sig_atomic_t s){
@@ -236,7 +236,7 @@ int helpCmd(char **argv)
 
 int startCmd(char **argv)
 {
-    if (argv[1] == NULL) cout << "List of process this shell support is .bat and .exe" << endl;
+    if (argv[1] == NULL) cout << "Process this shell support is .bat and .exe" << endl;
 
     else
     {
@@ -295,7 +295,7 @@ int killCmd(char **argv)
     else
     {
         int i = (int) atoi(argv[1]);
-        if (i > ID)
+        if (i > ID || i <= 0)
         {
             cout << "The ID of process is not exist" << endl;
             return 1;
@@ -396,7 +396,7 @@ int dirCmd(char **argv)
 	
     if(INVALID_HANDLE_VALUE == hFindFile)
     {
-	    cout<< "The directory has no files";
+	    cout<< "The directory has no files" << endl;
 	    return 0;
     } else 
     {
@@ -449,7 +449,7 @@ int stopCmd(char **argv)
     else
     {
         int i = (int) atoi(argv[1]);
-        if (i > ID)
+        if (i > ID || i <= 0)
         {
             cout << "The ID of process is not exist" << endl;
             return 1;
@@ -474,7 +474,7 @@ int resumeCmd(char **argv)
     else
     {
         int i = (int) atoi(argv[1]);
-        if (i > ID)
+        if (i > ID || i <= 0)
         {
             cout << "The ID of process is not exist" << endl;
             return 1;
