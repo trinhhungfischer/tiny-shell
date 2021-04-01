@@ -8,11 +8,12 @@
 #include <signal.h>
 using namespace std;
 
-#define LSH_RL_BUFFSIZE 1024
-#define LSH_TOK_BUFSIZE 64
+#define SHELL_RL_BUFSIZE 1024
+#define SHELL_TOK_BUFSIZE 64
 #define NUM_OF_CMD 12
-#define LSH_TOK_DELIM " \n\r\t"
+#define SHELL_TOK_DELIM " "
 
+// Global boolean status variable of shell
 bool status = true;
 
 struct processStruct
@@ -29,9 +30,9 @@ processStruct listProcess[64];
 processStruct foregroundProcess;
 int ID = 0;
 
-void lsh_loop();
-char * lsh_read_line();
-char ** lsh_split_line(char *line);
+void shell_loop();
+char * shell_read_line();
+char ** shell_split_line(char *line);
 int execute_line(char **argv);
 void removeProcessFromList(int id);
 void my_handler(sig_atomic_t s);
@@ -95,12 +96,12 @@ const char *listInstruction[] = {"Quit the myShell.exe program",
 
 int main(int argc, char const *argv[])
 {
-    lsh_loop();
+    shell_loop();
     
     return EXIT_SUCCESS;
 }
 
-void lsh_loop()
+void shell_loop()
 {
     char* line;
     char **args;
@@ -108,8 +109,8 @@ void lsh_loop()
     
     do {
         cout << "myShell> ";
-        line = lsh_read_line();
-        args = lsh_split_line(line);
+        line = shell_read_line();
+        args = shell_split_line(line);
 
 
         int error = execute_line(args);
@@ -121,23 +122,21 @@ void lsh_loop()
     while (status);
 }
 
-char *lsh_read_line(void)
+char *shell_read_line(void)
 {
-    int bufsize = LSH_RL_BUFFSIZE;
+    int bufsize = SHELL_RL_BUFSIZE;
     int position = 0;
     char *buffer = (char*) malloc(sizeof(char) * bufsize);
     int c;
 
     if (!buffer) {
-        fprintf(stderr, "lsh: allocation error\n");
+        fprintf(stderr, "shell: allocation error\n");
         exit(EXIT_FAILURE);
     }
 
         while (1) {
-            // Read a character
             c = getchar();
 
-            // If we hit EOF, replace it with a null character and return.
             if (c == EOF || c == '\n') {
             buffer[position] = '\0';
             return buffer;
@@ -146,44 +145,43 @@ char *lsh_read_line(void)
         }
         position++;
 
-    // If we have exceeded the buffer, reallocate.
     if (position >= bufsize) {
-        bufsize += LSH_RL_BUFFSIZE;
+        bufsize += SHELL_RL_BUFSIZE;
         buffer = (char *) realloc(buffer, bufsize);
         if (!buffer) {
-            fprintf(stderr, "lsh: allocation error\n");
+            fprintf(stderr, "shell: allocation error\n");
             exit(EXIT_FAILURE);
       }
     }
   }
 }
  
-char **lsh_split_line(char *line)
+char **shell_split_line(char *line)
 {
-    int bufsize = LSH_TOK_BUFSIZE, position = 0;
+    int bufsize = SHELL_TOK_BUFSIZE, position = 0;
     char **tokens =(char**) malloc(bufsize * sizeof(char*));
     char *token;
 
     if (!tokens) {
-        fprintf(stderr, "lsh: allocation error\n");
+        fprintf(stderr, "shell: allocation error\n");
         exit(EXIT_FAILURE);
     }
 
-    token = strtok(line, LSH_TOK_DELIM);
+    token = strtok(line, SHELL_TOK_DELIM);
     while (token != NULL) {
         tokens[position] = token;
         position++;
 
         if (position >= bufsize) {
-            bufsize += LSH_TOK_BUFSIZE;
+            bufsize += SHELL_TOK_BUFSIZE;
             tokens = (char **)realloc(tokens, bufsize * sizeof(char*));
             if (!tokens) {
-                fprintf(stderr, "lsh: allocation error\n");
+                fprintf(stderr, "shell: allocation error\n");
                 exit(EXIT_FAILURE);
             }
         }
 
-        token = strtok(NULL, LSH_TOK_DELIM);
+        token = strtok(NULL, SHELL_TOK_DELIM);
     }
     tokens[position] = NULL;
     return tokens;
@@ -273,7 +271,7 @@ int startCmd(char **argv)
                 TerminateProcess(pi.hProcess, 0);
             } else
             {
-                cout << "Write fail Instruction here";
+                cout << "Only two way to run process: background(default), foreground" << endl;
             }
         }
         else if (strstr(argv[1], ".bat") != NULL)
@@ -357,6 +355,8 @@ int listCmd(char **argv)
         cout << "There are no background proccess" << endl;
         return 0;
     }
+    else
+    printf("%-9s%-16s%-16s%s\n","ID", "Cmd Name", "Id Process", "Status");
 
     for (int i = 0; i< ID; i++)
     {
@@ -367,8 +367,8 @@ int listCmd(char **argv)
             removeProcessFromList(i);
         }
         else{
-            const char *status = (listProcess[i].status == 0)?"running":"stop";
-            printf("%-9d%-16s%s", listProcess[i].id + 1, listProcess[i].cmdName, status);
+            const char *status = (listProcess[i].status == 0)?"running":"stopping";
+            printf("%-9d%-16s%-16lu%s", listProcess[i].id + 1, listProcess[i].cmdName, listProcess[i].pi.dwProcessId, status);
             cout << endl;
         }
     }
@@ -454,6 +454,11 @@ int stopCmd(char **argv)
             cout << "The ID of process is not exist" << endl;
             return 1;
         }
+        if (listProcess[i - 1].status == 1)
+        {
+            cout << "This process is still stopping" << endl;
+            return 0;
+        }
     
         SuspendThread(listProcess[i - 1].pi.hThread);
         listProcess[i - 1].status = 1;
@@ -478,6 +483,12 @@ int resumeCmd(char **argv)
         {
             cout << "The ID of process is not exist" << endl;
             return 1;
+        }
+
+        if (listProcess[i - 1].status == 0)
+        {
+            cout << "This process is already running" << endl;
+            return 0;
         }
     
         ResumeThread(listProcess[i - 1].pi.hThread);
@@ -510,7 +521,7 @@ int pathCmd(char **argv)
 
    lpszVariable = (LPTSTR) lpvEnv;
 
-	while(*lpszVariable!='P'&&*lpszVariable!='p')lpszVariable += lstrlen(lpszVariable) + 1;
+	while (*lpszVariable!='P'&&*lpszVariable!='p') lpszVariable += lstrlen(lpszVariable) + 1;
         printf("%s\n", lpszVariable);
 
 	FreeEnvironmentStrings(lpvEnv);
@@ -518,17 +529,21 @@ int pathCmd(char **argv)
 	return 0;
 }
 
-void SetUserVariablePath(char* value){
+void SetUserVariablePath(char* value)
+{
     HKEY hkey;
     long regOpenResult;
     const char key_name[] = "Environment";
 	LPTSTR lpszVariable; 
     LPTCH lpvEnv; 
-	lpvEnv = GetEnvironmentStrings();
+	
+    lpvEnv = GetEnvironmentStrings();
     lpszVariable = (LPTSTR) lpvEnv;
-	while(*lpszVariable!='P'&&*lpszVariable!='p')lpszVariable += lstrlen(lpszVariable) + 1;
-	lpszVariable += 5;
-	string strval = lpszVariable;strval+=";"+string(value);
+	while(*lpszVariable!='P'&&*lpszVariable!='p') lpszVariable += lstrlen(lpszVariable) + 1;
+    lpszVariable += 5;
+	
+    string strval = lpszVariable;
+    strval+=";"+string(value);
 	const char *path=(char*) strval.c_str();
 	FreeEnvironmentStrings(lpvEnv);                                               //new_value path need to update 
     regOpenResult = RegOpenKeyEx(HKEY_CURRENT_USER,key_name, 0, KEY_ALL_ACCESS, &hkey);
@@ -566,12 +581,12 @@ void runDotBat(char *fileName)
         {
             char * cstr = new char [line.length() - 1];
             strcpy(cstr, line.c_str());
-            char ** args = lsh_split_line(cstr);
+            char ** args = shell_split_line(cstr);
             execute_line(args);
         }
     }
     else{
-        cout << "Don not exit " << fileName << " in this direcory";
+        cout << "Do not exit " << fileName << " in this direcory";
     }
    
 }
