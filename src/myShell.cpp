@@ -10,7 +10,7 @@ using namespace std;
 
 #define SHELL_RL_BUFSIZE 1024
 #define SHELL_TOK_BUFSIZE 64
-#define NUM_OF_CMD 12
+#define NUM_OF_CMD 13
 #define SHELL_TOK_DELIM " "
 
 // Global boolean status variable of shell
@@ -52,6 +52,7 @@ int pathCmd(char **argv);
 int addpathCmd(char **argv);
 int dateCmd(char **argv);
 int killCmd(char **argv);
+int foregroundCmd(char **argv);
 
 int (*ptr_func[])(char **) = {
     &exitCmd,
@@ -65,7 +66,8 @@ int (*ptr_func[])(char **) = {
     &resumeCmd,
     &pathCmd,
     &addpathCmd,
-    &killCmd 
+    &killCmd,
+    &foregroundCmd
 };
 
 const char * listLsh[] = {"exit", 
@@ -79,7 +81,8 @@ const char * listLsh[] = {"exit",
                         "resume", 
                         "path", 
                         "addpath",
-                        "kill"};
+                        "kill",
+                        "fg"};
 
 const char *listInstruction[] = {"Quit the myShell.exe program", 
                             "Provide Help information for myShell commands", 
@@ -92,7 +95,8 @@ const char *listInstruction[] = {"Quit the myShell.exe program",
                             "Resume a suspended process with its ID (Know its ID by list command)", 
                             "Display all global environment path", 
                             "Add a variable to the global environment path", 
-                            "Kill a single process with its ID (Know its ID by list command)"};
+                            "Kill a single process with its ID (Know its ID by list command)",
+                            "Change a background process to foreground process (Know its ID by list command)"};
 
 int main(int argc, char const *argv[])
 {
@@ -266,9 +270,11 @@ int startCmd(char **argv)
                 CreateProcessA(processName,NULL,NULL,NULL,FALSE,
                     CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
                 foregroundProcess = processStruct{0, processName, 0, pi};
-                signal (SIGINT,my_handler);
+                signal (SIGINT, my_handler);
                 WaitForSingleObject(pi.hProcess, INFINITE);
                 TerminateProcess(pi.hProcess, 0);
+                CloseHandle(pi.hProcess);
+                CloseHandle(pi.hThread);
             } else
             {
                 cout << "Only two way to run process: background(default), foreground" << endl;
@@ -589,6 +595,40 @@ void runDotBat(char *fileName)
         cout << "Do not exit " << fileName << " in this direcory";
     }
    
+}
+
+int foregroundCmd(char **argv)
+{
+    if (argv[1] == NULL)
+    {
+        cout << "Please stop + 'ID_of_Process'" << endl;
+        return 1;
+    }
+    else
+    {
+        int i = (int) atoi(argv[1]);
+        if (i > ID || i <= 0)
+        {
+            cout << "The ID of process is not exist" << endl;
+            return 1;
+        }
+        else
+        {
+            foregroundProcess.cmdName = listProcess[i - 1].cmdName;
+            foregroundProcess.id = 0;
+            foregroundProcess.pi = listProcess[i - 1].pi;
+            signal(SIGINT,my_handler);
+            WaitForSingleObject(foregroundProcess.pi.hProcess, INFINITE);
+            TerminateProcess(foregroundProcess.pi.hProcess, 0);
+            
+            CloseHandle(foregroundProcess.pi.hProcess);
+            CloseHandle(foregroundProcess.pi.hThread);
+            removeProcessFromList(i - 1);
+            return 0;
+        }
+    }
+    return 0;
+
 }
 
 void removeProcessFromList(int Id)
