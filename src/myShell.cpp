@@ -362,7 +362,7 @@ int listCmd(char **argv)
         return 0;
     }
     else
-    printf("%-9s%-16s%-16s%s\n","ID", "Cmd Name", "Id Process", "Status");
+    printf("%-9s%-16s%-16s%s\n","ID", "Cmd Name", "ID In Window", "Status");
 
     for (int i = 0; i< ID; i++)
     {
