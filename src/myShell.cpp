@@ -6,11 +6,12 @@
 #include <tchar.h>
 #include <stdio.h>
 #include <signal.h>
+#include <list>
 using namespace std;
 
 #define SHELL_RL_BUFSIZE 1024
 #define SHELL_TOK_BUFSIZE 64
-#define NUM_OF_CMD 13
+#define NUM_OF_CMD 14
 #define SHELL_TOK_DELIM " "
 
 // Global boolean status variable of shell
@@ -26,6 +27,7 @@ struct processStruct
 };
 
 // This is global variable to store ID, and process Info
+list<processStruct> processList;
 processStruct listProcess[64];
 processStruct foregroundProcess;
 int ID = 0;
@@ -37,8 +39,12 @@ int execute_line(char **argv);
 void removeProcessFromList(int id);
 void my_handler(sig_atomic_t s);
 void runDotBat(char *nameFile);
+char *getSubName(char *nameFile);
 
-
+/*
+    Khai báo các hàm sử dụng để thể hiên các thao tác
+    của shell
+*/
 int startCmd(char **argv);
 int helpCmd(char **argv);
 int timeCmd(char **argv);
@@ -53,7 +59,13 @@ int addpathCmd(char **argv);
 int dateCmd(char **argv);
 int killCmd(char **argv);
 int foregroundCmd(char **argv);
+int cleanCmd(char **argv);
 
+/*
+    Các hàm mà con trỏ hàm trỏ tới được liệt kê có thứ tự
+    tại đây, các hàm đó nhận cùng tham số dòng lệnh sau khi
+    được phân tích mà người dùng nhập vào  
+*/
 int (*ptr_func[])(char **) = {
     &exitCmd,
     &helpCmd,
@@ -67,7 +79,8 @@ int (*ptr_func[])(char **) = {
     &pathCmd,
     &addpathCmd,
     &killCmd,
-    &foregroundCmd
+    &foregroundCmd,
+    &cleanCmd
 };
 
 const char * listLsh[] = {"exit", 
@@ -82,7 +95,8 @@ const char * listLsh[] = {"exit",
                         "path", 
                         "addpath",
                         "kill",
-                        "fg"};
+                        "fg",
+                        "cls"};
 
 const char *listInstruction[] = {"Quit the myShell.exe program", 
                             "Provide Help information for myShell commands", 
@@ -95,21 +109,26 @@ const char *listInstruction[] = {"Quit the myShell.exe program",
                             "Resume a suspended process with its ID (Know its ID by list command)", 
                             "Display all global environment path", 
                             "Add a variable to the global environment path", 
-                            "Kill a single process with its ID (Know its ID by list command)",
-                            "Change a background process to foreground process (Know its ID by list command)"};
+                            "Kill a single process with its ID or all by -1 (Know its ID by list command)",
+                            "Change a background process to foreground process (Know its ID by list command)",
+                            "Clean the mini shell screen"};
 
 int main(int argc, char const *argv[])
 {
+    SetConsoleTitle("myShell");
     shell_loop();
     
     return EXIT_SUCCESS;
 }
 
+/*
+    Vòng lặp shell được lặp bằng cách kiểm tra điều kiện dừng 
+    của shell là biến trạng thái status 
+*/
 void shell_loop()
 {
     char* line;
     char **args;
-
     
     do {
         cout << "myShell> ";
@@ -126,6 +145,9 @@ void shell_loop()
     while (status);
 }
 
+/*
+    Đọc lệnh được người dùng nhập từ bàn phím
+*/
 char *shell_read_line(void)
 {
     int bufsize = SHELL_RL_BUFSIZE;
@@ -159,7 +181,12 @@ char *shell_read_line(void)
     }
   }
 }
- 
+
+
+/*
+    Phân tích lệnh từ người dùng từ bàn phím thành các
+    từ nhờ đó dễ dàng thực hiện lệnh
+*/
 char **shell_split_line(char *line)
 {
     int bufsize = SHELL_TOK_BUFSIZE, position = 0;
@@ -191,6 +218,12 @@ char **shell_split_line(char *line)
     return tokens;
 }
 
+
+/*
+    Thực hiện lênh từ bộ phân tích lệnh bằng cách kiểm tra tính
+    chính xác của câu lệnh và gọi tới hàm công việc phù hợp thông
+    qua con trỏ hàm
+*/
 int execute_line(char **args)
 {
     int i = 0;
@@ -213,6 +246,10 @@ int execute_line(char **args)
     return 0;
 }
 
+/*
+    Hàm thực hiện khi nhân được tín hiệu ngắt tác vụ foreground bằng
+    tổ hợp phím Ctrl + C từ bàn phím
+*/
 void my_handler(sig_atomic_t s){
     TerminateProcess(foregroundProcess.pi.hProcess, 0);
 
@@ -221,8 +258,11 @@ void my_handler(sig_atomic_t s){
     cout << "You use Ctrl + C to kill " << foregroundProcess.cmdName <<" foreground process" << endl;
 }
 
+/*
+    In ra danh sách các câu lệnh và hướng dẫn tương ứng
+*/
 int helpCmd(char **argv)
-{
+{ 
     cout << "_________________________________________________________________________" << endl;
     cout << "                             Project 1" << endl;
     cout << "_________________________________________________________________________" << endl;
@@ -236,6 +276,11 @@ int helpCmd(char **argv)
     return 0;
 }
 
+/*
+    Bắt đầu một tiến trình mới ở một trong hai chế độ
+    foreground và background, các tiến trình hay file mà 
+    shell hỗ trợ là .exe và .bat
+*/
 int startCmd(char **argv)
 {
     if (argv[1] == NULL) cout << "Process this shell support is .bat and .exe" << endl;
@@ -254,10 +299,15 @@ int startCmd(char **argv)
                 si.cb = sizeof(si);
 
                 CreateProcessA(processName,NULL,NULL,NULL,FALSE,
-                   CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
-                listProcess[ID] = processStruct{ID, argv[1], 0, pi};
-            
-                ID ++;
+                   CREATE_NEW_CONSOLE,NULL,NULL,(LPSTARTUPINFOA) &si,&pi);
+                if (pi.dwProcessId == 0) {
+                    cout << "This file not exit in this directory, use dir\n";
+                }
+                else {
+                    listProcess[ID] = processStruct{ID, argv[1], 0, pi};
+                    strcpy(listProcess[ID].cmdName, getSubName(argv[1]));
+                    ID ++;
+                }
             
             }
             else if (strcmp(argv[2], "foreground") == 0)
@@ -268,13 +318,18 @@ int startCmd(char **argv)
                 si.cb = sizeof(si);
 
                 CreateProcessA(processName,NULL,NULL,NULL,FALSE,
-                    CREATE_NEW_CONSOLE,NULL,NULL,&si,&pi);
-                foregroundProcess = processStruct{0, processName, 0, pi};
-                signal (SIGINT, my_handler);
-                WaitForSingleObject(pi.hProcess, INFINITE);
-                TerminateProcess(pi.hProcess, 0);
-                CloseHandle(pi.hProcess);
-                CloseHandle(pi.hThread);
+                    CREATE_NEW_CONSOLE,NULL,NULL, (LPSTARTUPINFOA) &si,&pi);
+                if (pi.dwProcessId == 0) {
+                    cout << "This file not exit in this directory, use dir\n";
+                }
+                else {
+                    foregroundProcess = processStruct{0, argv[1], 0, pi};
+                    signal (SIGINT, my_handler);
+                    WaitForSingleObject(pi.hProcess, INFINITE);
+                    TerminateProcess(pi.hProcess, 0);
+                    CloseHandle(pi.hProcess);
+                    CloseHandle(pi.hThread);
+                }
             } else
             {
                 cout << "Only two way to run process: background(default), foreground" << endl;
@@ -283,8 +338,56 @@ int startCmd(char **argv)
         else if (strstr(argv[1], ".bat") != NULL)
         {
             runDotBat(argv[1]);
-        }
-        
+        } else
+        {
+            char ext[] = ".exe";
+            char *processName = argv[1];
+            
+            if (argv[2] == NULL || strcmp(argv[2], "background") == 0)
+            {
+                strcat(processName, ext);
+                STARTUPINFO si ;
+                PROCESS_INFORMATION pi;
+                ZeroMemory(&si, sizeof(si));
+                si.cb = sizeof(si);
+
+                CreateProcessA(processName,NULL,NULL,NULL,FALSE,
+                   CREATE_NEW_CONSOLE,NULL,NULL,(LPSTARTUPINFOA) &si,&pi);
+                if (pi.dwProcessId == 0) {
+                    cout << "This file not exit in this directory, use dir\n";
+                }
+                else {
+                    listProcess[ID] = processStruct{ID, argv[1], 0, pi};
+                    strcpy(listProcess[ID].cmdName, getSubName(argv[1]));
+                    ID ++;
+                }
+            }
+            else if (strcmp(argv[2], "foreground") == 0)
+            {
+                strcat(processName, ext);
+                STARTUPINFO si ;
+                PROCESS_INFORMATION pi;
+                ZeroMemory(&si, sizeof(si));
+                si.cb = sizeof(si);
+
+                CreateProcessA(processName,NULL,NULL,NULL,FALSE,
+                    CREATE_NEW_CONSOLE,NULL,NULL, (LPSTARTUPINFOA) &si,&pi);
+                if (pi.dwProcessId == 0) {
+                    cout << "This file not exit in this directory, use dir\n";
+                }
+                else {
+                    foregroundProcess = processStruct{0, argv[1], 0, pi};
+                    signal (SIGINT, my_handler);
+                    WaitForSingleObject(pi.hProcess, INFINITE);
+                    TerminateProcess(pi.hProcess, 0);
+                    CloseHandle(pi.hProcess);
+                    CloseHandle(pi.hThread);
+                }
+            } else
+            {
+                cout << "Only two way to run process: background(default), foreground" << endl;
+            }
+        }  
     }
     return 0;
 }
@@ -299,6 +402,18 @@ int killCmd(char **argv)
     else
     {
         int i = (int) atoi(argv[1]);
+        if (i == -1)  
+        {
+            for (int j = sizeof(listProcess) / sizeof(processStruct) - 1; j >= 0; j--)
+            {
+                TerminateProcess(listProcess[j].pi.hProcess, 0);
+                CloseHandle(listProcess[j].pi.hProcess);
+                CloseHandle(listProcess[j].pi.hThread);
+                removeProcessFromList(j);
+            }
+            ID = 0;
+            return 0;            
+        }
         if (i > ID || i <= 0)
         {
             cout << "The ID of process is not exist" << endl;
@@ -351,18 +466,28 @@ int exitCmd(char **argv)
 {
     cout << "Quit shell success" << endl;
     status = false;
+    for (int i = sizeof(listProcess) / sizeof(processStruct) - 1; i >= 0; i--)
+    {
+        TerminateProcess(listProcess[i].pi.hProcess, 0);
+
+        CloseHandle(listProcess[i].pi.hProcess);
+        CloseHandle(listProcess[i].pi.hThread);
+    }
+
+    return 0;
+}
+
+int cleanCmd(char **argv)
+{
+    system("cls");
     return 0;
 }
 
 int listCmd(char **argv)
 {
-    if (ID == 0)
-    {
-        cout << "There are no background proccess" << endl;
-        return 0;
-    }
-    else
-    printf("%-9s%-16s%-16s%s\n","ID", "Cmd Name", "ID In Window", "Status");
+    printf("_______________________________________________________________________\n");
+    printf("%-9s|%-32s|%-16s|%s\n","ID", "Cmd Name", "ID In Window", "Status");
+    printf("_________|________________________________|________________|___________\n");
 
     for (int i = 0; i< ID; i++)
     {
@@ -374,10 +499,11 @@ int listCmd(char **argv)
         }
         else{
             const char *status = (listProcess[i].status == 0)?"running":"stopping";
-            printf("%-9d%-16s%-16lu%s", listProcess[i].id + 1, listProcess[i].cmdName, listProcess[i].pi.dwProcessId, status);
+            printf("%-9d|%-32s|%-16lu|%s", listProcess[i].id + 1, listProcess[i].cmdName, listProcess[i].pi.dwProcessId, status);
             cout << endl;
         }
     }
+    printf("_________|________________________________|________________|___________\n");
     return 0;
 }
 
@@ -398,7 +524,7 @@ int dirCmd(char **argv)
     }
 	LPCSTR file = str;
 	double sum = 0;int countfile=0,countfolder=0;
-	hFindFile = FindFirstFileA(file,&FindFileData);
+	hFindFile = FindFirstFileA(file, &FindFileData);
 	
     if(INVALID_HANDLE_VALUE == hFindFile)
     {
@@ -505,6 +631,11 @@ int resumeCmd(char **argv)
     }
 }
 
+/*
+    Chức năng thật sự của câu lệnh path là in ra các biến môi trưởng mà shell quản lý
+    Nhờ các biến môi trường này thì thay vì chúng ta khi khởi tạo một tiến trình 
+    nếu không có trong thư mục hiện tại của shell nó sẽ tìm kiếm trong các biến môi trường
+*/
 int pathCmd(char **argv)
 {
        // cout << "Path" << endl;
@@ -551,7 +682,7 @@ void SetUserVariablePath(char* value)
     string strval = lpszVariable;
     strval+=";"+string(value);
 	const char *path=(char*) strval.c_str();
-	FreeEnvironmentStrings(lpvEnv);                                               //new_value path need to update 
+	FreeEnvironmentStrings(lpvEnv);                                           //new_value path need to update 
     regOpenResult = RegOpenKeyEx(HKEY_CURRENT_USER,key_name, 0, KEY_ALL_ACCESS, &hkey);
     LPCSTR stuff = "path";                                                   //Variable Name 
     RegSetValueEx(hkey,stuff,0,REG_SZ,(BYTE*) path, strlen(path));
@@ -577,25 +708,6 @@ int dateCmd(char **argv)
     return 0;
 }
 
-void runDotBat(char *fileName)
-{
-    ifstream file(fileName);
-    if (file.is_open())
-    {
-        string line;
-        while ( getline(file, line))
-        {
-            char * cstr = new char [line.length() - 1];
-            strcpy(cstr, line.c_str());
-            char ** args = shell_split_line(cstr);
-            execute_line(args);
-        }
-    }
-    else{
-        cout << "Do not exit " << fileName << " in this direcory";
-    }
-   
-}
 
 int foregroundCmd(char **argv)
 {
@@ -631,10 +743,50 @@ int foregroundCmd(char **argv)
 
 }
 
+void runDotBat(char *fileName)
+{
+    ifstream file(fileName);
+    if (file.is_open())
+    {
+        string line;
+        while (getline(file, line))
+        {
+            char * cstr = new char [line.length() - 1];
+            strcpy(cstr, line.c_str());
+            char ** args = shell_split_line(cstr);
+            execute_line(args);
+        }
+    }
+    else{
+        cout << "Do not exit " << fileName << " in this direcory\n";
+    }
+}
+
+
 void removeProcessFromList(int Id)
 {
     listProcess[Id].cmdName = listProcess[ID - 1].cmdName;
     listProcess[Id].pi = listProcess[ID - 1].pi;
     listProcess[Id].status = listProcess[ID - 1].status;
     ID --;
+}
+
+char *getSubName(char *fileName)
+{
+    int i = strlen(fileName) - 1;
+    int size = 0;
+    while (i >= 0)
+    {
+        if (*(fileName + i) == '/' || *(fileName + i) == '\\')
+        {
+            break;
+        }
+        i --;
+        size ++;
+    }
+    i++;
+    char* processName;
+    strncpy(processName, fileName + i, size);
+    processName[size] = '\0';
+    return processName;
 }
