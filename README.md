@@ -4,8 +4,8 @@ mini shell is a simple implementation of a shell in C++, and it is the OS Concep
 
 
 ## Contributing
-- Trịnh Quang Hùng
-- Trần Tiến Bằng
-- Trịnh Hồng Phượng
+- [Trịnh Quang Hùng](https://github.com/trinhhungfischer)
+- [Trần Tiến Bằng](https://github.com/TranBang875)
+- [Trịnh Hồng Phượng](https://github.com/hongphuong0211)
 
 ## Appreciating all your contributions to our project.
